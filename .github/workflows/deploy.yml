@@ -1,0 +1,148 @@
+name: Test, Build and Deploy to Raspberry Pi
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Run Unit Tests
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run test coverage (if available)
+        run: npm run test:coverage || echo "Coverage not available, skipping..."
+        continue-on-error: true
+
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: Raspberry
+    needs: test
+    name: Build and Deploy to Raspberry Pi
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Set up date and tag environment variables
+        run: |
+          echo "IMAGE_TAG=$(date +'%Y%m%d')-rasp" >> $GITHUB_ENV
+          echo "COMMIT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker images
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }} \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }} \
+            --push .
+
+      - name: Deploy to Raspberry Pi
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.RASPBERRY_HOST }}
+          username: ${{ secrets.RASPBERRY_USER }}
+          key: ${{ secrets.RASPBERRY_SSH_KEY }}
+          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          script: |
+            # Stop and remove existing container
+            docker stop sporty-leagues || true
+            docker rm sporty-leagues || true
+            
+            # Remove old images (keep last 3)
+            docker images ${{ secrets.DOCKER_USERNAME }}/sporty-leagues --format "table {{.Tag}}" | grep -v TAG | tail -n +4 | xargs -I {} docker rmi ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:{} || true
+            
+            # Pull latest image
+            docker pull ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest
+            
+            # Run new container
+            docker run -d \
+              --name sporty-leagues \
+              --restart unless-stopped \
+              -p 8080:80 \
+              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost/health || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest
+            
+            # Wait for container to be healthy
+            echo "Waiting for container to be healthy..."
+            timeout 60 bash -c 'until docker inspect --format="{{.State.Health.Status}}" sporty-leagues | grep -q healthy; do sleep 2; done' || echo "Container health check timeout"
+            
+            # Show container status
+            docker ps -a --filter name=sporty-leagues
+            echo "Deployment completed!"
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.RASPBERRY_HOST }}
+          username: ${{ secrets.RASPBERRY_USER }}
+          key: ${{ secrets.RASPBERRY_SSH_KEY }}
+          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          script: |
+            # Test application health
+            if curl -f http://localhost:8080/health; then
+              echo "✅ Application is healthy and responding!"
+            else
+              echo "❌ Application health check failed!"
+              exit 1
+            fi
+            
+            # Show resource usage
+            echo "Container resource usage:"
+            docker stats sporty-leagues --no-stream
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "🎉 Sporty Leagues successfully deployed to Raspberry Pi!"
+          echo "🔗 Application URL: http://${{ secrets.RASPBERRY_HOST }}:8080"
+          echo "📊 Docker Hub: https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/sporty-leagues"
+
+      - name: Notify deployment failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Check the logs above for details."
+          exit 1
