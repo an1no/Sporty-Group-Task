@@ -31,7 +31,6 @@ export class AppComponent {
     initialValue: { leagues: [], loading: true, error: null }
   });
 
-  // Fix: Simplified computed signals as `leaguesState` is guaranteed to have a value due to `initialValue`.
   leagues = computed(() => this.leaguesState().leagues);
   loading = computed(() => this.leaguesState().loading);
   error = computed(() => this.leaguesState().error);
