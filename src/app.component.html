@@ -1,0 +1,40 @@
+<main class="min-h-screen container mx-auto px-4 py-8">
+  <header class="text-center mb-10">
+    <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-700 pb-2">
+      Sporty Leagues
+    </h1>
+  </header>
+
+  @if (loading()) {
+    <div class="flex items-center justify-center h-64">
+        <div class="flex items-center justify-center space-x-2 text-gray-400">
+            <svg class="animate-spin h-8 w-8 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-xl">Loading Leagues...</span>
+        </div>
+    </div>
+  }
+
+  @if (error(); as errorMessage) {
+    <div class="flex flex-col items-center justify-center h-64 bg-red-900/20 border border-red-700 rounded-lg p-6">
+       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 text-red-500 mb-4">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+       </svg>
+      <p class="text-xl font-bold text-red-400">An Error Occurred</p>
+      <p class="text-gray-300">{{ errorMessage }}</p>
+    </div>
+  }
+
+  @if (!loading() && !error()) {
+    <app-search-filter 
+      [sports]="uniqueSports()" 
+      (searchChange)="onSearchChange($event)" 
+      (sportChange)="onSportChange($event)"
+    ></app-search-filter>
+    <app-league-list 
+      [leagues]="filteredLeagues()"
+    ></app-league-list>
+  }
+</main>

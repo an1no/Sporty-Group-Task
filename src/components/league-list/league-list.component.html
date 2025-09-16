@@ -1,0 +1,60 @@
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+  @for (league of leagues(); track league.idLeague) {
+    <div 
+      (click)="selectLeague(league.idLeague)"
+      class="bg-gray-800 rounded-lg shadow-lg overflow-hidden cursor-pointer transform hover:-translate-y-1 transition-all duration-300"
+      [class.ring-2]="selectedLeagueId() === league.idLeague"
+      [class.ring-red-500]="selectedLeagueId() === league.idLeague"
+    >
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xl font-bold text-red-500 truncate" [title]="league.strLeague">{{ league.strLeague }}</h3>
+        </div>
+        <p class="text-sm text-gray-400 font-medium mb-4">{{ league.strSport }}</p>
+        @if (league.strLeagueAlternate) {
+          <p class="text-xs text-gray-500 truncate" [title]="league.strLeagueAlternate">
+            {{ league.strLeagueAlternate }}
+          </p>
+        }
+      </div>
+
+      @if (selectedLeagueId() === league.idLeague) {
+        <div class="bg-gray-800/50 p-4 border-t border-gray-700 min-h-[160px] flex items-center justify-center">
+          @switch (badgeResource()?.state) {
+            @case ('loaded') {
+              @if (badgeResource()?.badgeUrl; as badgeUrl) {
+                <div class="bg-white/10 rounded-full p-2">
+                   <img [ngSrc]="badgeUrl" alt="{{ league.strLeague }} badge" width="128" height="128" class="object-contain" />
+                </div>
+              } @else {
+                <div class="text-center text-gray-500">
+                  <p>No badge available for this league.</p>
+                </div>
+              }
+            }
+            @case ('idle') {
+            }
+            @default {
+              <div class="flex items-center justify-center space-x-2 text-gray-400">
+                <svg class="animate-spin h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Fetching badge...</span>
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
+
+@if (leagues().length === 0) {
+  <div class="flex flex-col items-center justify-center text-center text-gray-500 py-16">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-16 h-16 mb-4">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+      </svg>
+    <p class="text-xl font-semibold">No leagues found</p>
+  </div>
+}
