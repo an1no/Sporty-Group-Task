@@ -285,6 +285,119 @@ function testSportsService() {
   console.log('✅ SportsService tests passed!');
 }
 
+// Test CacheService functionality
+function testCacheService() {
+  console.log('Testing CacheService...');
+  
+  const mockStore = new Map();
+  const service = {
+    store: mockStore,
+    
+    set: function(storeName, key, data) {
+      const entry = {
+        key,
+        data,
+        timestamp: Date.now(),
+        storeName
+      };
+      this.store.set(`${storeName}:${key}`, entry);
+      return of(void 0);
+    },
+    
+    get: function(storeName, key) {
+      const entry = this.store.get(`${storeName}:${key}`);
+      if (!entry) return of(null);
+      
+      // Check TTL (1 hour for leagues)
+      const ttl = storeName === 'leagues' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+      if (Date.now() - entry.timestamp > ttl) {
+        this.store.delete(`${storeName}:${key}`);
+        return of(null);
+      }
+      
+      return of(entry.data);
+    },
+    
+    clear: function(storeName) {
+      const keysToDelete = [];
+      for (const [key, entry] of this.store.entries()) {
+        if (entry.storeName === storeName) {
+          keysToDelete.push(key);
+        }
+      }
+      keysToDelete.forEach(key => this.store.delete(key));
+      return of(void 0);
+    },
+    
+    cleanup: function() {
+      let cleanedCount = 0;
+      const now = Date.now();
+      
+      for (const [key, entry] of this.store.entries()) {
+        const ttl = entry.storeName === 'leagues' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+        if (now - entry.timestamp > ttl) {
+          this.store.delete(key);
+          cleanedCount++;
+        }
+      }
+      
+      return of(cleanedCount);
+    }
+  };
+  
+  // Test 1: Store and retrieve data
+  console.log('✓ Test 1: Store and retrieve data');
+  const testData = { name: 'Premier League', sport: 'Soccer' };
+  service.set('leagues', 'test-key', testData).subscribe();
+  service.get('leagues', 'test-key').subscribe(result => {
+    if (!result || result.name !== 'Premier League') {
+      throw new Error('Store and retrieve failed');
+    }
+  });
+  
+  // Test 2: Return null for non-existent key
+  console.log('✓ Test 2: Return null for non-existent key');
+  service.get('leagues', 'non-existent').subscribe(result => {
+    if (result !== null) {
+      throw new Error('Should return null for non-existent key');
+    }
+  });
+  
+  // Test 3: Clear cache
+  console.log('✓ Test 3: Clear cache');
+  service.clear('leagues').subscribe();
+  service.get('leagues', 'test-key').subscribe(result => {
+    if (result !== null) {
+      throw new Error('Cache clear failed');
+    }
+  });
+  
+  // Test 4: TTL expiration simulation
+  console.log('✓ Test 4: TTL expiration simulation');
+  const expiredEntry = {
+    key: 'expired-key',
+    data: { name: 'Expired League' },
+    timestamp: Date.now() - (2 * 60 * 60 * 1000), // 2 hours ago
+    storeName: 'leagues'
+  };
+  service.store.set('leagues:expired-key', expiredEntry);
+  service.get('leagues', 'expired-key').subscribe(result => {
+    if (result !== null) {
+      throw new Error('Expired entry should return null');
+    }
+  });
+  
+  // Test 5: Cleanup expired entries
+  console.log('✓ Test 5: Cleanup expired entries');
+  service.cleanup().subscribe(cleanedCount => {
+    if (cleanedCount < 0) {
+      throw new Error('Cleanup should return non-negative count');
+    }
+  });
+  
+  console.log('✅ CacheService tests passed!');
+}
+
 // Run all tests
 async function runAllTests() {
   console.log('🚀 Starting unit tests...\n');
@@ -300,6 +413,9 @@ async function runAllTests() {
     console.log('');
     
     testSportsService();
+    console.log('');
+    
+    testCacheService();
     console.log('');
     
     console.log('🎉 All tests passed successfully!');

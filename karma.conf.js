@@ -3,10 +3,14 @@ module.exports = function(config) {
     basePath: '',
     frameworks: ['jasmine'],
     files: [
-      'src/**/*.spec.ts'
+      'src/**/*.spec.ts',
+      'src/**/*.ts'
     ],
-    exclude: [],
+    exclude: [
+      'src/**/*.d.ts'
+    ],
     preprocessors: {
+      'src/**/*.ts': ['coverage'],
       'src/**/*.spec.ts': ['coverage']
     },
     reporters: ['progress', 'coverage'],
@@ -21,9 +25,19 @@ module.exports = function(config) {
       dir: require('path').join(__dirname, './coverage'),
       subdir: '.',
       reporters: [
-        { type: 'html' },
-        { type: 'text-summary' }
-      ]
+        { type: 'html', subdir: 'html' },
+        { type: 'text-summary' },
+        { type: 'lcov', subdir: 'lcov' },
+        { type: 'json', subdir: 'json', file: 'coverage.json' }
+      ],
+      check: {
+        global: {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80
+        }
+      }
     }
   });
 };

@@ -8,6 +8,7 @@
     "build": "ng build",
     "preview": "ng serve --configuration=production",
     "test": "node test-runner.mjs",
+    "test:coverage": "karma start --single-run --coverage",
     "test:watch": "karma start --auto-watch",
     "test:single": "karma start --single-run"
   },
