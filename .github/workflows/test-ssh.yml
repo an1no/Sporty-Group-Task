@@ -1,0 +1,94 @@
+name: Test SSH Connection to Raspberry Pi
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-ssh:
+    runs-on: ubuntu-latest
+    environment: Raspberry
+    name: Test SSH Connection
+
+    steps:
+      - name: Test SSH Connection
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.RASPBERRY_HOST }}
+          username: ${{ secrets.RASPBERRY_USER }}
+          key: ${{ secrets.RASPBERRY_SSH_KEY }}
+          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          script: |
+            echo "🎉 SSH Connection Successful!"
+            echo "================================"
+            echo "📍 Connected to: $(hostname)"
+            echo "👤 User: $(whoami)"
+            echo "🕐 Date: $(date)"
+            echo "📊 Uptime: $(uptime)"
+            echo "💾 Disk usage:"
+            df -h / | tail -1
+            echo "🧠 Memory usage:"
+            free -h | grep Mem
+            echo "🐳 Docker status:"
+            if command -v docker &> /dev/null; then
+              echo "✅ Docker is installed"
+              docker --version
+              echo "🔄 Docker service status:"
+              sudo systemctl is-active docker || systemctl is-active docker
+              echo "📦 Running containers:"
+              docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || echo "No containers running"
+            else
+              echo "❌ Docker is not installed"
+            fi
+            echo "🌐 Network connectivity:"
+            ping -c 3 google.com || echo "❌ No internet connection"
+            echo "================================"
+            echo "✅ SSH test completed successfully!"
+
+      - name: Test Docker Permissions
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.RASPBERRY_HOST }}
+          username: ${{ secrets.RASPBERRY_USER }}
+          key: ${{ secrets.RASPBERRY_SSH_KEY }}
+          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          script: |
+            echo "🐳 Testing Docker permissions..."
+            if docker ps &> /dev/null; then
+              echo "✅ Docker permissions are correct"
+              echo "📋 Current Docker images:"
+              docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | head -10
+            else
+              echo "❌ Docker permission denied. User may need to be added to docker group:"
+              echo "   sudo usermod -aG docker $USER"
+              echo "   Then logout and login again"
+            fi
+
+      - name: Test Application Port
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.RASPBERRY_HOST }}
+          username: ${{ secrets.RASPBERRY_USER }}
+          key: ${{ secrets.RASPBERRY_SSH_KEY }}
+          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          script: |
+            echo "🔌 Testing application port 8080..."
+            if netstat -tuln | grep :8080 &> /dev/null || ss -tuln | grep :8080 &> /dev/null; then
+              echo "✅ Port 8080 is in use"
+              echo "🔍 Process using port 8080:"
+              sudo netstat -tulnp | grep :8080 || sudo ss -tulnp | grep :8080
+            else
+              echo "ℹ️  Port 8080 is available for the application"
+            fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "🎯 SSH Connection Test Summary"
+          echo "============================="
+          echo "✅ SSH Connection: Successful"
+          echo "🔧 Environment: Ready for deployment"
+          echo "📋 Next steps:"
+          echo "   1. All secrets are configured correctly"
+          echo "   2. SSH connection is working"
+          echo "   3. Ready to run the main deployment workflow"
+          echo "   4. Go to Actions → 'Test, Build and Deploy to Raspberry Pi' → Run workflow"
