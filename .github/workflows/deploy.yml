@@ -100,7 +100,7 @@ jobs:
               --name sporty-leagues \
               --restart unless-stopped \
               -p 8080:80 \
-              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost/health || exit 1" \
+              --health-cmd="curl -f http://127.0.0.1/health || exit 1" \
               --health-interval=30s \
               --health-timeout=10s \
               --health-retries=3 \
@@ -123,7 +123,7 @@ jobs:
           port: ${{ secrets.RASPBERRY_PORT || 22 }}
           script: |
             # Test application health
-            if curl -f http://localhost:8080/health; then
+            if curl -f http://127.0.0.1:8080/health; then
               echo "✅ Application is healthy and responding!"
             else
               echo "❌ Application health check failed!"
