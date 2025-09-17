@@ -150,10 +150,10 @@ jobs:
       - name: Deploy to Raspberry Pi
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.RASPBERRY_HOST }}
+          host: ${{ vars.RASPBERRY_HOST }}
           username: ${{ secrets.RASPBERRY_USER }}
           key: ${{ secrets.RASPBERRY_SSH_KEY }}
-          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          port: ${{ vars.RASPBERRY_PORT || 22 }}
           script: |
             # Stop and remove existing container
             docker stop sporty-leagues || true
@@ -187,10 +187,10 @@ jobs:
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.RASPBERRY_HOST }}
+          host: ${{ vars.RASPBERRY_HOST }}
           username: ${{ secrets.RASPBERRY_USER }}
           key: ${{ secrets.RASPBERRY_SSH_KEY }}
-          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          port: ${{ vars.RASPBERRY_PORT || 22 }}
           script: |
             # Test application health
             if curl -f http://127.0.0.1:8080/health; then
@@ -214,7 +214,7 @@ jobs:
             echo "🎉 Sporty Leagues successfully deployed to Raspberry Pi!"
             echo "⚠️ Built for: AMD64 only (ARM64 build failed)"
           fi
-          echo "🔗 Application URL: http://${{ secrets.RASPBERRY_HOST }}:8080"
+          echo "🔗 Application URL: http://${{ vars.RASPBERRY_HOST }}:8080"
           echo "📊 Docker Hub: https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/sporty-leagues"
 
       - name: Notify deployment failure
