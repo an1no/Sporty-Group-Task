@@ -4,11 +4,20 @@ FROM node:20-alpine AS builder
 # Set working directory
 WORKDIR /app
 
+# Configure npm for better network handling
+RUN npm config set network-timeout 300000 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retries 5
+
 # Copy package files for dependency installation
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with retry logic
+RUN npm ci --verbose || \
+    (sleep 10 && npm ci --verbose) || \
+    (sleep 30 && npm ci --verbose) || \
+    (sleep 60 && npm ci --verbose --maxsockets 1)
 
 # Copy source code
 COPY . .

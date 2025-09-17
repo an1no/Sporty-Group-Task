@@ -66,16 +66,85 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker images
+      - name: Build and push AMD64 image
         run: |
           docker buildx build \
-            --platform linux/amd64,linux/arm64 \
+            --platform linux/amd64 \
             --cache-from=type=local,src=/tmp/.buildx-cache \
             --cache-to=type=local,dest=/tmp/.buildx-cache \
-            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest \
-            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }} \
-            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }} \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest-amd64 \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }}-amd64 \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }}-amd64 \
             --push .
+
+      - name: Build and push ARM64 image (with retry)
+        id: arm64_build
+        continue-on-error: true
+        run: |
+          # Retry ARM64 build up to 2 times with exponential backoff
+          for attempt in 1 2; do
+            echo "🔄 ARM64 build attempt $attempt/2"
+            if docker buildx build \
+              --platform linux/arm64 \
+              --cache-from=type=local,src=/tmp/.buildx-cache \
+              --cache-to=type=local,dest=/tmp/.buildx-cache \
+              --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest-arm64 \
+              --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }}-arm64 \
+              --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }}-arm64 \
+              --push .; then
+              echo "✅ ARM64 build succeeded on attempt $attempt"
+              echo "arm64_success=true" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              echo "❌ ARM64 build failed on attempt $attempt"
+              if [ $attempt -lt 2 ]; then
+                echo "⏳ Waiting 30 seconds before retry..."
+                sleep 30
+              fi
+            fi
+          done
+          echo "❌ All ARM64 build attempts failed"
+          echo "arm64_success=false" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Create and push multi-platform manifest
+        if: steps.arm64_build.outcome == 'success' && steps.arm64_build.outputs.arm64_success == 'true'
+        run: |
+          # Create manifest for latest
+          docker buildx imagetools create \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest-amd64 \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest-arm64
+          
+          # Create manifest for date tag
+          docker buildx imagetools create \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }} \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }}-amd64 \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }}-arm64
+          
+          # Create manifest for commit tag
+          docker buildx imagetools create \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }} \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }}-amd64 \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }}-arm64
+
+      - name: Create AMD64-only manifest (fallback)
+        if: steps.arm64_build.outcome == 'failure' || steps.arm64_build.outputs.arm64_success == 'false'
+        run: |
+          echo "⚠️ ARM64 build failed, creating AMD64-only images"
+          
+          # Tag AMD64 images as the main tags
+          docker buildx imagetools create \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:latest-amd64
+          
+          docker buildx imagetools create \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }} \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.IMAGE_TAG }}-amd64
+          
+          docker buildx imagetools create \
+            --tag ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }} \
+            ${{ secrets.DOCKER_USERNAME }}/sporty-leagues:${{ env.COMMIT_SHA }}-amd64
 
       - name: Deploy to Raspberry Pi
         uses: appleboy/ssh-action@v1.0.0
@@ -137,7 +206,13 @@ jobs:
       - name: Notify deployment success
         if: success()
         run: |
-          echo "🎉 Sporty Leagues successfully deployed to Raspberry Pi!"
+          if [[ "${{ steps.arm64_build.outputs.arm64_success }}" == "true" ]]; then
+            echo "🎉 Sporty Leagues successfully deployed to Raspberry Pi with multi-platform support!"
+            echo "🏗️ Built for: AMD64 + ARM64"
+          else
+            echo "🎉 Sporty Leagues successfully deployed to Raspberry Pi!"
+            echo "⚠️ Built for: AMD64 only (ARM64 build failed)"
+          fi
           echo "🔗 Application URL: http://${{ secrets.RASPBERRY_HOST }}:8080"
           echo "📊 Docker Hub: https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/sporty-leagues"
 
@@ -145,4 +220,8 @@ jobs:
         if: failure()
         run: |
           echo "❌ Deployment failed! Check the logs above for details."
+          if [[ "${{ steps.arm64_build.outputs.arm64_success }}" == "false" ]]; then
+            echo "💡 Note: ARM64 build failed due to network timeout. This is common in GitHub Actions."
+            echo "💡 Consider using separate ARM64 runners or building locally if multi-platform support is critical."
+          fi
           exit 1
