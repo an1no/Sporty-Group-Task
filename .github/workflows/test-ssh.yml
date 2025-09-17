@@ -13,10 +13,10 @@ jobs:
       - name: Test SSH Connection
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.RASPBERRY_HOST }}
+          host: ${{ vars.RASPBERRY_HOST }}
           username: ${{ secrets.RASPBERRY_USER }}
           key: ${{ secrets.RASPBERRY_SSH_KEY }}
-          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          port: ${{ vars.RASPBERRY_PORT || 22 }}
           script: |
             echo "🎉 SSH Connection Successful!"
             echo "================================"
@@ -47,10 +47,10 @@ jobs:
       - name: Test Docker Permissions
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.RASPBERRY_HOST }}
+          host: ${{ vars.RASPBERRY_HOST }}
           username: ${{ secrets.RASPBERRY_USER }}
           key: ${{ secrets.RASPBERRY_SSH_KEY }}
-          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          port: ${{ vars.RASPBERRY_PORT || 22 }}
           script: |
             echo "🐳 Testing Docker permissions..."
             if docker ps &> /dev/null; then
@@ -66,10 +66,10 @@ jobs:
       - name: Test Application Port
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.RASPBERRY_HOST }}
+          host: ${{ vars.RASPBERRY_HOST }}
           username: ${{ secrets.RASPBERRY_USER }}
           key: ${{ secrets.RASPBERRY_SSH_KEY }}
-          port: ${{ secrets.RASPBERRY_PORT || 22 }}
+          port: ${{ vars.RASPBERRY_PORT || 22 }}
           script: |
             echo "🔌 Testing application port 8080..."
             if netstat -tuln | grep :8080 &> /dev/null || ss -tuln | grep :8080 &> /dev/null; then
