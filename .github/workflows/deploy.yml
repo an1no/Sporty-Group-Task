@@ -51,7 +51,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          # Use package-lock.json to key the cache. This improves cache hits.
+          key: ${{ runner.os }}-buildx-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-buildx-
 
